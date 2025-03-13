@@ -1,0 +1,2487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Crunch</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #loading-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+            max-width: 400px;
+        }
+        #debug-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
+            max-width: 500px;
+        }
+    </style>
+    <!-- Try using a different CDN for Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <div id="loading-info">Loading game environment...</div>
+    <div id="debug-panel">Debug information will appear here...</div>
+    
+    <script>
+        // Improved debug logging
+        const debugPanel = document.getElementById('debug-panel');
+        const loadingInfo = document.getElementById('loading-info');
+        
+        function log(message) {
+            console.log(message);
+            debugPanel.innerHTML += message + '<br>';
+            debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+        
+        function updateLoadingInfo(message) {
+            loadingInfo.innerHTML = message;
+        }
+        
+        log('Starting game initialization...');
+        
+        // Check if Three.js loaded properly
+        if (typeof THREE === 'undefined') {
+            log('ERROR: Three.js failed to load!');
+            updateLoadingInfo('ERROR: Three.js failed to load! Please check your internet connection.');
+            throw new Error('Three.js not loaded');
+        }
+        
+        log('Three.js loaded successfully: ' + THREE.REVISION);
+        
+        // Load GLTFLoader script dynamically with enhanced error handling
+        function loadGLTFLoader() {
+            return new Promise((resolve, reject) => {
+                log('Loading GLTFLoader...');
+                
+                // Try multiple CDNs if one fails
+                const cdnUrls = [
+                    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js',
+                    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js',
+                    'https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js'
+                ];
+                
+                function tryNextCDN(index) {
+                    if (index >= cdnUrls.length) {
+                        const error = 'Failed to load GLTFLoader from all CDNs';
+                        log('ERROR: ' + error);
+                        reject(new Error(error));
+                        return;
+                    }
+                    
+                    const url = cdnUrls[index];
+                    log(`Trying to load GLTFLoader from: ${url}`);
+                    
+                    const script = document.createElement('script');
+                    script.src = url;
+                    
+                    script.onload = function() {
+                        log('GLTFLoader loaded successfully!');
+                        resolve();
+                    };
+                    
+                    script.onerror = function() {
+                        log(`Failed to load from ${url}, trying next CDN...`);
+                        tryNextCDN(index + 1);
+                    };
+                    
+                    document.head.appendChild(script);
+                }
+                
+                tryNextCDN(0);
+            });
+        }
+        
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f9ff); // Light blue background
+        
+        // Camera
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 15);
+        
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Enhanced lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+        
+        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight2.position.set(-1, 0.5, -1);
+        scene.add(directionalLight2);
+        
+        // Add a spotlight to draw attention to display areas
+        const spotlight = new THREE.SpotLight(0xffffff, 1.5);
+        spotlight.position.set(30, 20, 30);
+        spotlight.angle = Math.PI / 6;
+        spotlight.penumbra = 0.2;
+        spotlight.castShadow = true;
+        scene.add(spotlight);
+        
+        // Camera and movement settings
+        const cameraDistance = 12;
+        const cameraHeight = 5;
+        let cameraAngle = 0;
+        
+        // Add zoom variables
+        const minZoom = 5;      // Minimum zoom distance (closer to player)
+        const maxZoom = 20;     // Maximum zoom distance (farther from player)
+        let currentZoom = 12;   // Initial zoom distance
+        
+        // Cell environment
+        const cellRadius = 50;
+        const cellGeometry = new THREE.SphereGeometry(cellRadius, 32, 32);
+        const cellMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffdddd,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.BackSide
+        });
+        const cellMembrane = new THREE.Mesh(cellGeometry, cellMaterial);
+        scene.add(cellMembrane);
+        
+        // Nucleus
+        const nucleusRadius = 15;
+        const nucleusGeometry = new THREE.SphereGeometry(nucleusRadius, 32, 32);
+        const nucleusMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x6a5acd,
+            transparent: true,
+            opacity: 0.7
+        });
+        const nucleus = new THREE.Mesh(nucleusGeometry, nucleusMaterial);
+        nucleus.position.set(-20, 0, -15);
+        scene.add(nucleus);
+        
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(100, 100);
+        const floorMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xaaffaa,
+            transparent: true,
+            opacity: 0.5
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -10;
+        scene.add(floor);
+        
+        // Microtubules setup
+        const tubeOuterRadius = 0.5;
+        const microtubuleLength = 25;
+        const microtubules = [];
+        const attachmentPoints = [];
+        const landingMarkers = [];
+        
+        // Create microtubule function
+        function createMicrotubuleMesh() {
+            const tubeGeometry = new THREE.CylinderGeometry(
+                tubeOuterRadius,
+                tubeOuterRadius,
+                microtubuleLength,
+                16,
+                1,
+                false
+            );
+            
+            const tubeMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0088ff,
+                shininess: 70
+            });
+            
+            const tube = new THREE.Mesh(tubeGeometry, tubeMaterial);
+            const tubeGroup = new THREE.Group();
+            tubeGroup.add(tube);
+            
+            return tubeGroup;
+        }
+        
+        // Generate microtubules with attachment points
+        for (let i = 0; i < 10; i++) {
+            const microtubule = createMicrotubuleMesh();
+            
+            const radius = 30 * Math.random() + 15;
+            const angle = (i / 10) * Math.PI * 2;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            const y = Math.random() * 6 - 3;
+            
+            microtubule.position.set(x, y, z);
+            
+            // Add attachment points before rotation
+            const numAttachPoints = 5;
+            for (let j = 0; j < numAttachPoints; j++) {
+                const ratio = j / (numAttachPoints - 1);
+                const posY = (ratio - 0.5) * microtubuleLength;
+                
+                const marker = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 16, 16),
+                    new THREE.MeshPhongMaterial({ color: 0xffff00 })
+                );
+                
+                marker.position.set(tubeOuterRadius, posY, 0);
+                microtubule.add(marker);
+                
+                attachmentPoints.push({
+                    visualizer: marker,
+                    microtubule: microtubule,
+                    used: false
+                });
+            }
+            
+            // Apply rotation after adding attachment points
+            microtubule.rotation.z = Math.PI / 2;
+            microtubule.rotation.y = Math.random() * Math.PI * 2;
+            
+            scene.add(microtubule);
+            microtubules.push(microtubule);
+        }
+        
+        // Add central microtubule
+        const centralMicrotubule = createMicrotubuleMesh();
+        centralMicrotubule.position.set(0, 0, 0);
+        
+        // Add attachment points to central microtubule
+        for (let j = 0; j < 5; j++) {
+            const ratio = j / 4;
+            const posY = (ratio - 0.5) * microtubuleLength;
+            
+            const marker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2, 16, 16),
+                new THREE.MeshPhongMaterial({ color: 0xff6600 })
+            );
+            
+            marker.position.set(tubeOuterRadius, posY, 0);
+            centralMicrotubule.add(marker);
+            
+            attachmentPoints.push({
+                visualizer: marker,
+                microtubule: centralMicrotubule,
+                used: false
+            });
+        }
+        
+        centralMicrotubule.rotation.z = Math.PI / 2;
+        scene.add(centralMicrotubule);
+        microtubules.push(centralMicrotubule);
+        
+        // Connection material
+        const connectionMaterial = new THREE.LineBasicMaterial({ 
+            color: 0x00ffff,
+            opacity: 0.7,
+            transparent: true
+        });
+        
+        // Movement controls
+        const moveSpeed = 0.2;
+        const liftSpeed = 0.15;
+        const keys = {};
+        document.addEventListener('keydown', (event) => keys[event.code] = true);
+        document.addEventListener('keyup', (event) => keys[event.code] = false);
+        
+        // Landing detection function
+        function checkForLanding() {
+            if (camKII.position.y < 8) {
+                for (let i = 0; i < attachmentPoints.length; i++) {
+                    const point = attachmentPoints[i];
+                    if (point.used) continue;
+                    
+                    const worldPos = new THREE.Vector3();
+                    point.visualizer.getWorldPosition(worldPos);
+                    
+                    const distance = camKII.position.distanceTo(worldPos);
+                    
+                    if (distance < 3) {
+                        // Visual feedback
+                        const originalColor = point.visualizer.material.color.clone();
+                        point.visualizer.material.color.set(0xff0000);
+                        
+                        setTimeout(() => {
+                            point.visualizer.material.color.copy(originalColor);
+                        }, 500);
+                        
+                        // Create landing marker
+                        const landingMarker = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.3, 32, 32),
+                            new THREE.MeshPhongMaterial({
+                                color: 0xff3333,
+                                emissive: 0x330000
+                            })
+                        );
+                        
+                        landingMarker.position.copy(worldPos);
+                        scene.add(landingMarker);
+                        landingMarkers.push(landingMarker);
+                        
+                        point.used = true;
+                        
+                        // Create connection between markers
+                        if (landingMarkers.length >= 2) {
+                            const linePoints = [
+                                landingMarkers[landingMarkers.length - 2].position,
+                                landingMarkers[landingMarkers.length - 1].position
+                            ];
+                            
+                            const geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+                            const line = new THREE.Line(geometry, connectionMaterial);
+                            scene.add(line);
+                        }
+                        
+                        camKII.position.y = worldPos.y + 3;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        
+        // Create more visible model display areas
+        function createModelDisplayAreas() {
+            log('Creating model display areas...');
+            
+            // CamKII display area - larger and more visible
+            const camKIIBox = new THREE.Mesh(
+                new THREE.BoxGeometry(12, 12, 12),
+                new THREE.MeshBasicMaterial({
+                    color: 0xff00ff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.8
+                })
+            );
+            camKIIBox.position.set(30, 5, 30);
+            scene.add(camKIIBox);
+            
+            // Add a platform under the CamKII model
+            const camKIIPlatform = new THREE.Mesh(
+                new THREE.CylinderGeometry(6, 8, 1, 32),
+                new THREE.MeshPhongMaterial({
+                    color: 0xff00ff,
+                    emissive: 0x330033
+                })
+            );
+            camKIIPlatform.position.set(30, 0, 30);
+            scene.add(camKIIPlatform);
+            
+            // Microtubule display area - larger and more visible
+            const mtBox = new THREE.Mesh(
+                new THREE.BoxGeometry(18, 18, 18),
+                new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    wireframe: true,
+                    transparent: true,
+                    opacity: 0.8
+                })
+            );
+            mtBox.position.set(-30, 5, 30);
+            scene.add(mtBox);
+            
+            // Add a platform under the Microtubule model
+            const mtPlatform = new THREE.Mesh(
+                new THREE.CylinderGeometry(9, 12, 1, 32),
+                new THREE.MeshPhongMaterial({
+                    color: 0x00ffff,
+                    emissive: 0x003333
+                })
+            );
+            mtPlatform.position.set(-30, 0, 30);
+            scene.add(mtPlatform);
+            
+            // Add text labels in 3D space
+            const makeTextSprite = function(message, x, y, z, color) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.width = 256;
+                canvas.height = 128;
+                
+                context.font = "Bold 20px Arial";
+                context.fillStyle = "rgba(0,0,0,0.8)";
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                context.fillStyle = color;
+                context.fillText(message, 10, 64);
+                
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({ map: texture });
+                const sprite = new THREE.Sprite(material);
+                sprite.position.set(x, y, z);
+                sprite.scale.set(10, 5, 1);
+                scene.add(sprite);
+                
+                return sprite;
+            };
+            
+            const camKIILabel = makeTextSprite("CamKII Model", 30, 15, 30, "rgba(255,128,255,1.0)");
+            const mtLabel = makeTextSprite("Microtubule Model", -30, 15, 30, "rgba(128,255,255,1.0)");
+            
+            return {
+                camKIIBox,
+                camKIIPlatform,
+                mtBox,
+                mtPlatform,
+                camKIILabel,
+                mtLabel
+            };
+        }
+        
+        // Create temporary CamKII model
+        let camKII;
+        function createFallbackCamKII() {
+            log('Creating fallback CamKII...');
+            
+            // Make it more interesting looking than just a cylinder
+            const group = new THREE.Group();
+            
+            // Base cylinder
+            const baseGeometry = new THREE.CylinderGeometry(1, 1, 0.5, 6);
+            const baseMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                shininess: 50
+            });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            group.add(base);
+            
+            // Add some decoration to make it more visible
+            const topGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const topMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff0000,
+                emissive: 0x330000
+            });
+            
+            // Add spheres on top
+            for (let i = 0; i < 6; i++) {
+                const angle = (i / 6) * Math.PI * 2;
+                const x = Math.cos(angle) * 0.7;
+                const z = Math.sin(angle) * 0.7;
+                const sphere = new THREE.Mesh(topGeometry, topMaterial);
+                sphere.position.set(x, 0.3, z);
+                group.add(sphere);
+            }
+            
+            if (camKII) scene.remove(camKII);
+            
+            group.position.set(0, 5, 0);
+            scene.add(group);
+            
+            return group;
+        }
+        
+        // Create initial CamKII
+        log('Creating initial player character...');
+        camKII = createFallbackCamKII();
+        
+        // Create model display areas
+        const displayAreas = createModelDisplayAreas();
+        
+        // Improved model loading with size controls
+        async function loadGLBModel(fileName, onSuccess, position, maxSize = 5) {
+            if (!THREE.GLTFLoader) {
+                log('ERROR: GLTFLoader not available. Cannot load models.');
+                updateLoadingInfo('Error: GLTFLoader not available. The game will run with basic models.');
+                return;
+            }
+            
+            log(`Attempting to load GLB model: ${fileName}`);
+            updateLoadingInfo(`Loading model: ${fileName}...`);
+            
+            // Set a permanent tag for all GLB models to prevent them from being cleared
+            const modelTag = `${fileName}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            log(`Creating model with unique tag: ${modelTag}`);
+            
+            // Try multiple paths in case the file location varies
+            const pathsToTry = [
+                fileName,           // Same directory
+                `./${fileName}`,    // Explicit relative path
+                `models/${fileName}`, // Common models subdirectory
+                `/models/${fileName}`, // Root models directory
+                `assets/${fileName}`,  // Common assets subdirectory
+                `/assets/${fileName}`  // Root assets directory
+            ];
+            
+            const loader = new THREE.GLTFLoader();
+            
+            // Try each path sequentially
+            for (const path of pathsToTry) {
+                log(`Trying path: ${path}`);
+                
+                try {
+                    // Create a promise-based version of the load method
+                    const result = await new Promise((resolve, reject) => {
+                        loader.load(
+                            path,
+                            (gltf) => resolve(gltf),
+                            (xhr) => {
+                                if (xhr.lengthComputable) {
+                                    const percent = Math.floor((xhr.loaded / xhr.total) * 100);
+                                    updateLoadingInfo(`Loading ${fileName}: ${percent}%`);
+                                }
+                            },
+                            (error) => reject(error)
+                        );
+                    });
+                    
+                    log(`Successfully loaded from path: ${path}`);
+                    updateLoadingInfo(`Successfully loaded: ${fileName}`);
+                    
+                    // Process the model - adjust size
+                    const model = result.scene;
+                    
+                    // Add the permanent tag to prevent clearing
+                    model.userData.permanentTag = modelTag;
+                    model.userData.fileName = fileName;
+                    model.userData.isPersistent = true;
+                    
+                    // Calculate model size using bounding box
+                    model.updateMatrixWorld(true);
+                    const bbox = new THREE.Box3().setFromObject(model);
+                    const size = new THREE.Vector3();
+                    bbox.getSize(size);
+                    
+                    log(`Original model dimensions: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
+                    
+                    let scaleFactor = 1;  // Default: no scaling
+                    if (maxSize !== null) {
+                        // Only apply scaling if maxSize is specified
+                        const maxDimension = Math.max(size.x, size.y, size.z);
+                        scaleFactor = maxSize / maxDimension;
+                        log(`Applying scale factor: ${scaleFactor.toFixed(4)} to fit within ${maxSize} units`);
+                        model.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                    } else {
+                        log(`Using model's natural size (no scaling): ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
+                    }
+                    
+                    // Call success callback
+                    onSuccess(result, model, scaleFactor);
+                    return;
+                } catch (error) {
+                    log(`Error loading from path ${path}: ${error.message}`);
+                }
+            }
+            
+            log(`Failed to load model from any paths: ${fileName}`);
+            updateLoadingInfo(`Failed to load model: ${fileName}. Game will use fallback objects.`);
+        }
+        
+        // Main initialization function - update with the new model loading
+        async function initGame() {
+            try {
+                // Set a safety timeout to ensure the loading screen eventually clears
+                setTimeout(() => {
+                    // Force hide loading info after 15 seconds regardless of model loading
+                    if (loadingInfo.textContent.includes('Loading')) {
+                        log('Safety timeout triggered - some models may not have loaded');
+                        updateLoadingInfo(`
+                            <strong>Controls:</strong><br>
+                            WASD: Move horizontally<br>
+                            Space/Shift: Move up/down<br>
+                            Arrows Left/Right: Rotate camera<br>
+                            Arrows Up/Down: Zoom in/out<br><br>
+                            <em>Click this box to hide</em>
+                        `);
+                        loadingInfo.style.cursor = 'pointer';
+                        loadingInfo.onclick = function() {
+                            this.style.display = 'none';
+                        };
+                    }
+                }, 15000);
+
+                // Load GLTFLoader first
+                await loadGLTFLoader();
+                
+                log('GLTFLoader ready, adding microtubule models to scene...');
+                
+                // CREATE GLB MICROTUBULES FIRST - before player model
+                // This ensures they're loaded as part of the environment
+                createGLBMicrotubules(5);
+                
+                log('Starting player model loading...');
+                
+                // LOAD PLAYER MODEL FIRST to ensure it gets priority
+                try {
+                    log('Loading player character model (CamKII)...');
+                    await loadGLBModel('camkii.glb', function(gltf, model, scaleFactor) {
+                        log(`Successfully loaded CamKII model for player character (scale: ${scaleFactor})`);
+                        
+                        // Remove fallback
+                        scene.remove(camKII);
+                        
+                        // Set up the player model
+                        camKII = model;
+                        camKII.position.set(0, 5, 0);
+                        
+                        // Try different rotations to ensure correct orientation
+                        camKII.rotation.set(0, 0, 0); // Reset rotation first
+                        camKII.rotation.x = Math.PI / 2; // Rotate 90 degrees around X axis
+                        // If X axis doesn't work, we'll try alternatives in the next edit
+                        
+                        // Add a visible marker to identify the player model
+                        const playerMarker = new THREE.Mesh(
+                            new THREE.TorusGeometry(2, 0.1, 16, 32),
+                            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+                        );
+                        playerMarker.rotation.x = Math.PI / 2;
+                        playerMarker.position.y = -1; // Slightly below the model
+                        camKII.add(playerMarker);
+                        
+                        scene.add(camKII);
+                        log('Player model added to scene - confirmed as CamKII (rotated to side)');
+                    }, new THREE.Vector3(0, 5, 0), 2); // Max size 2 units for player
+                } catch (error) {
+                    log(`Error loading CamKII player model: ${error.message}`);
+                }
+                
+                // Load display models AFTER the player model
+                // Try to load CamKII model for the display area - much smaller now
+                try {
+                    await loadGLBModel('camkii.glb', function(gltf, model, scaleFactor) {
+                        log(`Successfully loaded CamKII model for display area (scale: ${scaleFactor})`);
+                        
+                        model.position.copy(displayAreas.camKIIBox.position);
+                        
+                        // Add rotation animation
+                        model.userData.rotate = true;
+                        
+                        scene.add(model);
+                        
+                        // Fade out the box
+                        const fadeInterval = setInterval(() => {
+                            displayAreas.camKIIBox.material.opacity -= 0.05;
+                            if (displayAreas.camKIIBox.material.opacity <= 0) {
+                                clearInterval(fadeInterval);
+                                scene.remove(displayAreas.camKIIBox);
+                            }
+                        }, 100);
+                    }, displayAreas.camKIIBox.position, 8); // Max size 8 units for display
+                } catch (error) {
+                    log(`Error loading CamKII display model: ${error.message}`);
+                }
+                
+                // Try to load microtubule model for the display area - much smaller now
+                try {
+                    await loadGLBModel('microtubule.glb', function(gltf, model, scaleFactor) {
+                        log(`Successfully loaded Microtubule model for display area (scale: ${scaleFactor})`);
+                        
+                        model.position.copy(displayAreas.mtBox.position);
+                        
+                        // Add rotation animation
+                        model.userData.rotate = true;
+                        
+                        scene.add(model);
+                        
+                        // Fade out the box
+                        const fadeInterval = setInterval(() => {
+                            displayAreas.mtBox.material.opacity -= 0.05;
+                            if (displayAreas.mtBox.material.opacity <= 0) {
+                                clearInterval(fadeInterval);
+                                scene.remove(displayAreas.mtBox);
+                            }
+                        }, 100);
+                    }, displayAreas.mtBox.position, 12); // Max size 12 units for display
+                } catch (error) {
+                    log(`Error loading Microtubule display model: ${error.message}`);
+                }
+                
+                // Hide loading info after all attempts
+                setTimeout(() => {
+                    loadingInfo.style.opacity = 0.8;
+                    loadingInfo.innerHTML = `
+                        <strong>Controls:</strong><br>
+                        WASD: Move horizontally<br>
+                        Space/Shift: Move up/down<br>
+                        Arrow Keys: Rotate/tilt camera<br><br>
+                        <em>Click this box to hide</em>
+                    `;
+                    loadingInfo.style.cursor = 'pointer';
+                    loadingInfo.onclick = function() {
+                        this.style.display = 'none';
+                    };
+                }, 5000);
+                
+            } catch (error) {
+                log(`Error in game initialization: ${error.message}`);
+                updateLoadingInfo(`Error initializing game: ${error.message}`);
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Skip if camKII isn't defined yet
+            if (!camKII) return;
+            
+            // Camera-relative movement
+            if (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD']) {
+                const forwardX = -Math.sin(cameraAngle);
+                const forwardZ = -Math.cos(cameraAngle);
+                const rightX = Math.cos(cameraAngle);
+                const rightZ = -Math.sin(cameraAngle);
+                
+                if (keys['KeyW']) {
+                    camKII.position.x += forwardX * moveSpeed;
+                    camKII.position.z += forwardZ * moveSpeed;
+                }
+                if (keys['KeyS']) {
+                    camKII.position.x -= forwardX * moveSpeed;
+                    camKII.position.z -= forwardZ * moveSpeed;
+                }
+                if (keys['KeyA']) {
+                    camKII.position.x -= rightX * moveSpeed;
+                    camKII.position.z -= rightZ * moveSpeed;
+                }
+                if (keys['KeyD']) {
+                    camKII.position.x += rightX * moveSpeed;
+                    camKII.position.z += rightZ * moveSpeed;
+                }
+            }
+            
+            // Vertical movement
+            if (keys['Space']) camKII.position.y += liftSpeed;
+            if (keys['ShiftLeft']) camKII.position.y -= liftSpeed;
+            
+            // Camera rotation (left/right arrows)
+            if (keys['ArrowLeft']) cameraAngle += 0.03;
+            if (keys['ArrowRight']) cameraAngle -= 0.03;
+            
+            // Camera zoom (up/down arrows)
+            if (keys['ArrowUp']) {
+                // Zoom in (get closer to player)
+                currentZoom = Math.max(minZoom, currentZoom - 0.3);
+                log(`Zooming in: ${currentZoom.toFixed(1)}`);
+            }
+            if (keys['ArrowDown']) {
+                // Zoom out (get farther from player)
+                currentZoom = Math.min(maxZoom, currentZoom + 0.3);
+                log(`Zooming out: ${currentZoom.toFixed(1)}`);
+            }
+            
+            // Update camera position with the new zoom value
+            const x = Math.sin(cameraAngle) * currentZoom;
+            const z = Math.cos(cameraAngle) * currentZoom;
+            camera.position.set(
+                camKII.position.x + x,
+                camKII.position.y + cameraHeight,
+                camKII.position.z + z
+            );
+            camera.lookAt(camKII.position);
+            
+            // Check for landing
+            checkForLanding();
+            
+            // Rotate display models
+            scene.traverse((object) => {
+                if (object.userData && object.userData.rotate) {
+                    object.rotation.y += 0.01;
+                }
+            });
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Start animation
+        animate();
+        
+        // Start initialization
+        initGame().catch(error => {
+            log(`Fatal error in initGame: ${error.message}`);
+            updateLoadingInfo(`Fatal error: ${error.message}. The game will run with basic models.`);
+        });
+        
+        // Add clear instructions for local server usage
+        const serverInstructions = `
+            <hr>
+            <strong>LOCAL SERVER INSTRUCTIONS:</strong><br>
+            To fix model loading, run one of these in your terminal:<br>
+            • With Node.js: <code>npx serve</code><br>
+            • With Python 3: <code>python -m http.server</code><br>
+            Then open: <code>http://localhost:3000</code> or <code>http://localhost:8000</code>
+        `;
+        
+        // Add server instructions after 10 seconds if models aren't loading
+        setTimeout(() => {
+            if (loadingInfo.textContent.includes('Failed') || loadingInfo.textContent.includes('Error')) {
+                loadingInfo.innerHTML += serverInstructions;
+            }
+        }, 10000);
+        
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Replace the existing createGLBMicrotubules function with this version that 
+        // applies proper scaling to the microtubule models
+
+        function createGLBMicrotubules(count = 5) {
+            log(`Adding ${count} GLB microtubule models to the environment...`);
+            
+            // Create visible markers at positions where microtubules will be placed
+            const markerPositions = [];
+            for (let i = 0; i < count; i++) {
+                // Position randomly but away from center
+                const radius = 30 * Math.random() + 20; // Between 20-50 units from center
+                const angle = Math.random() * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                const y = Math.random() * 8 - 4; // Between -4 and 4
+                
+                // Create a visible marker to show where the microtubule will appear
+                const marker = new THREE.Mesh(
+                    new THREE.CylinderGeometry(1.5, 1.5, 12, 8),  // Larger placeholder
+                    new THREE.MeshBasicMaterial({
+                        color: 0xff00ff,
+                        wireframe: true
+                    })
+                );
+                marker.position.set(x, y, z);
+                marker.rotation.z = Math.PI / 2; // Horizontal
+                marker.rotation.y = Math.random() * Math.PI * 2;
+                scene.add(marker);
+                
+                log(`Created marker for microtubule at position (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
+                
+                markerPositions.push({
+                    position: new THREE.Vector3(x, y, z),
+                    rotation: marker.rotation.clone(),
+                    marker: marker
+                });
+            }
+            
+            // Now load the models at those positions with proper scaling
+            for (const data of markerPositions) {
+                log(`Loading microtubule.glb at position ${data.position.toArray()}`);
+                
+                // Load with proper scaling - use 9 units as max size (3x larger than before)
+                loadGLBModel(
+                    'microtubule.glb',
+                    function(gltf, model, scaleFactor) {
+                        log(`Microtubule model loaded successfully with scale factor: ${scaleFactor}`);
+                        
+                        // Remove the placeholder marker
+                        scene.remove(data.marker);
+                        
+                        // Position and orientation
+                        model.position.copy(data.position);
+                        model.rotation.copy(data.rotation);
+                        
+                        // Tag as GLB microtubule with stronger persistence flag
+                        model.userData.type = 'glbMicrotubule';
+                        model.userData.isPersistent = true;  // Flag to never remove this model
+                        
+                        // Add to scene
+                        scene.add(model);
+                        
+                        // Add attachment points to this model
+                        addAttachmentPointsToGLBMicrotubule(model);
+                        
+                        log(`Successfully added microtubule model at ${data.position.toArray()}`);
+                    },
+                    data.position,
+                    9  // Maximum size of 9 units
+                );
+            }
+        }
+
+        // Call this function after page is fully loaded to ensure it takes effect
+        // Add this line after the existing createGLBMicrotubules(5) call
+        setTimeout(() => {
+            // Clear any existing microtubule models
+            scene.traverse(object => {
+                if (object.userData && object.userData.type === 'glbMicrotubule') {
+                    scene.remove(object);
+                }
+            });
+            
+            // Create new properly scaled microtubule models
+            log('Creating new properly scaled microtubule models...');
+            createGLBMicrotubules(5);
+        }, 1000);
+
+        // 4. Enhance the attachment point visuals in the addAttachmentPointsToGLBMicrotubule function:
+        function addAttachmentPointsToGLBMicrotubule(microtubuleModel) {
+            // Calculate model dimensions
+            const bbox = new THREE.Box3().setFromObject(microtubuleModel);
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+            
+            log(`Microtubule model dimensions: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
+            
+            // Get the longest dimension as the "length" axis
+            let mainAxis = 'x';
+            let radius = Math.min(size.y, size.z) / 2;
+            if (size.y > size.x && size.y > size.z) {
+                mainAxis = 'y';
+                radius = Math.min(size.x, size.z) / 2;
+            } else if (size.z > size.x && size.z > size.y) {
+                mainAxis = 'z';
+                radius = Math.min(size.x, size.y) / 2;
+            }
+            
+            log(`Determined main axis is ${mainAxis}, radius is approximately ${radius.toFixed(2)}`);
+            
+            // Add 5 attachment points along the microtubule
+            const numPoints = 5;
+            const mainLength = size[mainAxis];
+            
+            for (let i = 0; i < numPoints; i++) {
+                // Calculate position along the length (0.1 to 0.9 of total length)
+                const ratio = 0.1 + (i / (numPoints - 1)) * 0.8;
+                const offset = (ratio - 0.5) * mainLength;
+                
+                // Create more visible attachment point marker
+                const marker = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6, 16, 16), // Larger for better visibility
+                    new THREE.MeshPhongMaterial({ 
+                        color: 0xff9900,  // Orange
+                        emissive: 0xff3300, // Stronger glow
+                        shininess: 100
+                    })
+                );
+                
+                // Add pulsing light to make attachment points more visible
+                const pointLight = new THREE.PointLight(0xff9900, 0.5, 2);
+                marker.add(pointLight);
+                
+                // Position the marker based on the main axis
+                if (mainAxis === 'x') {
+                    marker.position.set(offset, radius, 0);
+                } else if (mainAxis === 'y') {
+                    marker.position.set(radius, offset, 0);
+                } else { // z
+                    marker.position.set(0, radius, offset);
+                }
+                
+                microtubuleModel.add(marker);
+                
+                // Add to attachment points array
+                attachmentPoints.push({
+                    visualizer: marker,
+                    microtubule: microtubuleModel,
+                    used: false
+                });
+                
+                log(`Added attachment point at position ${i+1}/${numPoints} on microtubule`);
+            }
+            
+            log(`Added ${numPoints} attachment points to GLB microtubule`);
+        }
+
+        // Update the createAssembledMicrotubule function for better alignment and persistence
+
+        function createAssembledMicrotubule(position, segments = 3) {
+            log(`Creating assembled microtubule with ${segments} segments at ${position.toArray()}`);
+            
+            // Create a container group for all segments
+            const assembledGroup = new THREE.Group();
+            assembledGroup.position.copy(position);
+            assembledGroup.rotation.z = Math.PI / 2; // Horizontal
+            assembledGroup.rotation.y = Math.random() * Math.PI * 2;
+            assembledGroup.userData.type = 'assembledMicrotubule';  // Never remove these
+            assembledGroup.userData.isAssembled = true;  // Mark as assembled for special handling
+            
+            scene.add(assembledGroup);
+            
+            // Create a temporary placeholder (make it more visually distinct)
+            const placeholderLength = segments * 15; // Approximate length
+            const placeholder = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.5, 1.5, placeholderLength, 16),
+                new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    wireframe: true
+                })
+            );
+            placeholder.rotation.z = Math.PI / 2; // Horizontal
+            assembledGroup.add(placeholder);
+            
+            // Load one segment to determine dimensions
+            loadGLBModel(
+                'microtubule.glb',
+                function(gltf, model, scaleFactor) {
+                    // Remove placeholder only after the first model is loaded
+                    assembledGroup.remove(placeholder);
+                    
+                    // Calculate model dimensions using more precise method
+                    const bbox = new THREE.Box3().setFromObject(model);
+                    const size = new THREE.Vector3();
+                    bbox.getSize(size);
+                    
+                    // Find the longest axis for proper alignment
+                    let mainAxis = 'x';
+                    let mainLength = size.x;
+                    if (size.y > size.x && size.y > size.z) {
+                        mainAxis = 'y';
+                        mainLength = size.y;
+                    } else if (size.z > size.x && size.z > size.y) {
+                        mainAxis = 'z';
+                        mainLength = size.z;
+                    }
+                    
+                    log(`First segment loaded, main axis: ${mainAxis}, length: ${mainLength.toFixed(2)}`);
+                    
+                    // Set tag that prevents this model from being removed
+                    model.userData.isAssembledSegment = true;
+                    model.userData.segment = 0;
+                    model.userData.mainAxis = mainAxis;
+                    model.userData.mainLength = mainLength;
+                    
+                    // Position the first segment at the beginning rather than center
+                    let firstSegmentPos = new THREE.Vector3();
+                    if (mainAxis === 'x') {
+                        firstSegmentPos.x = -(mainLength * (segments - 1)) / 2;
+                    } else if (mainAxis === 'y') {
+                        firstSegmentPos.y = -(mainLength * (segments - 1)) / 2;
+                    } else { // z
+                        firstSegmentPos.z = -(mainLength * (segments - 1)) / 2;
+                    }
+                    model.position.copy(firstSegmentPos);
+                    
+                    // Add the first segment
+                    assembledGroup.add(model);
+                    
+                    // Add attachment points to the first segment
+                    addAttachmentPointsToGLBMicrotubule(model);
+                    
+                    // Create visual connection points between segments
+                    const connectionMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x00ffaa,
+                        emissive: 0x00ff00,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    
+                    // Now load the remaining segments with precise positioning
+                    for (let i = 1; i < segments; i++) {
+                        // Create position offset based on main axis
+                        const offset = new THREE.Vector3();
+                        if (mainAxis === 'x') {
+                            offset.x = firstSegmentPos.x + mainLength * i;
+                        } else if (mainAxis === 'y') {
+                            offset.y = firstSegmentPos.y + mainLength * i;
+                        } else { // z axis
+                            offset.z = firstSegmentPos.z + mainLength * i;
+                        }
+                        
+                        // Add visual connection point for this segment joint
+                        const connector = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.9, 16, 16),
+                            connectionMaterial
+                        );
+                        connector.position.copy(offset);
+                        // Adjust position back by half-length to place at the joint
+                        if (mainAxis === 'x') {
+                            connector.position.x -= mainLength / 2;
+                        } else if (mainAxis === 'y') {
+                            connector.position.y -= mainLength / 2;
+                        } else { // z
+                            connector.position.z -= mainLength / 2;
+                        }
+                        assembledGroup.add(connector);
+                        
+                        // Load the next segment
+                        loadGLBModel(
+                            'microtubule.glb',
+                            function(gltf, segmentModel) {
+                                // Set special tag that prevents this model from being removed
+                                segmentModel.userData.isAssembledSegment = true;
+                                segmentModel.userData.segment = i;
+                                
+                                // Position precisely
+                                segmentModel.position.copy(offset);
+                                
+                                // Add to assembled group
+                                assembledGroup.add(segmentModel);
+                                
+                                // Add attachment points
+                                addAttachmentPointsToGLBMicrotubule(segmentModel);
+                                
+                                log(`Added segment ${i+1}/${segments} to assembled microtubule`);
+                            },
+                            null,  // No specific position (using offset relative to group)
+                            9      // Same size as individual microtubules
+                        );
+                    }
+                    
+                    // Add special glow effect to highlight this is an assembled structure
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x00ffff,
+                        transparent: true,
+                        opacity: 0.15,
+                        side: THREE.BackSide
+                    });
+                    
+                    const glowGeometry = new THREE.CylinderGeometry(
+                        3, 3, mainLength * segments, 16, 2, true
+                    );
+                    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                    
+                    // Position the glow in the center of the assembled structure
+                    if (mainAxis === 'x') {
+                        glow.position.x = firstSegmentPos.x + (mainLength * (segments - 1)) / 2;
+                        glow.rotation.z = Math.PI / 2;
+                    } else if (mainAxis === 'y') {
+                        glow.position.y = firstSegmentPos.y + (mainLength * (segments - 1)) / 2;
+                    } else { // z
+                        glow.position.z = firstSegmentPos.z + (mainLength * (segments - 1)) / 2;
+                        glow.rotation.x = Math.PI / 2;
+                    }
+                    
+                    assembledGroup.add(glow);
+                    
+                    log('Assembled microtubule creation completed');
+                },
+                null,  // No specific position (will be relative to group)
+                9      // Same size as individual microtubules
+            );
+            
+            return assembledGroup;
+        }
+
+        // 2. Add a new function specifically for creating a stack of LEGO-like connected microtubules
+
+        function createMicrotubuleStack(position, count = 3) {
+            log(`Creating a stack of ${count} precisely aligned microtubules at ${position.toArray()}`);
+            
+            // Create a container for the stack
+            const stackGroup = new THREE.Group();
+            stackGroup.position.copy(position);
+            stackGroup.userData.type = 'microtubuleStack';
+            scene.add(stackGroup);
+            
+            // First, create a placeholder to show where the stack will be
+            const placeholder = new THREE.Mesh(
+                new THREE.BoxGeometry(count * 10, 3, 3),
+                new THREE.MeshBasicMaterial({
+                    color: 0x00ff00,
+                    wireframe: true,
+                    opacity: 0.5,
+                    transparent: true
+                })
+            );
+            stackGroup.add(placeholder);
+            
+            // Load the models in sequence - waiting for each to complete before positioning the next
+            function loadSegment(index) {
+                if (index >= count) {
+                    // All segments loaded, remove placeholder
+                    stackGroup.remove(placeholder);
+                    log('Complete stack created successfully!');
+                    return;
+                }
+                
+                log(`Loading segment ${index + 1}/${count} of the stack...`);
+                
+                loadGLBModel(
+                    'microtubule.glb',
+                    function(gltf, model, scaleFactor) {
+                        // Calculate dimensions
+                        const bbox = new THREE.Box3().setFromObject(model);
+                        const size = new THREE.Vector3();
+                        bbox.getSize(size);
+                        
+                        // Identify the main axis
+                        const axes = ['x', 'y', 'z'];
+                        let mainAxis = 'x';
+                        let maxDim = size.x;
+                        
+                        for (const axis of axes) {
+                            if (size[axis] > maxDim) {
+                                mainAxis = axis;
+                                maxDim = size[axis];
+                            }
+                        }
+                        
+                        log(`Segment ${index + 1} main axis: ${mainAxis}, length: ${maxDim.toFixed(2)}`);
+                        
+                        // Store this info for the next segment
+                        model.userData.mainAxis = mainAxis;
+                        model.userData.length = maxDim;
+                        model.userData.isPersistent = true;
+                        model.userData.segmentIndex = index;
+                        
+                        // Position this segment
+                        const segmentPos = new THREE.Vector3();
+                        if (index > 0) {
+                            // Get the previous segment
+                            let prevSegment = null;
+                            stackGroup.traverse(child => {
+                                if (child.userData && child.userData.segmentIndex === index - 1) {
+                                    prevSegment = child;
+                                }
+                            });
+                            
+                            if (prevSegment) {
+                                // Position end-to-end with previous segment
+                                const prevAxis = prevSegment.userData.mainAxis;
+                                const prevLength = prevSegment.userData.length;
+                                
+                                // Copy the previous segment's position
+                                segmentPos.copy(prevSegment.position);
+                                
+                                // Adjust based on the main axis
+                                segmentPos[prevAxis] += prevLength;
+                            }
+                        }
+                        
+                        // Set position
+                        model.position.copy(segmentPos);
+                        
+                        // Add to group
+                        stackGroup.add(model);
+                        
+                        // Add connecting marker between segments
+                        if (index > 0) {
+                            const connector = new THREE.Mesh(
+                                new THREE.SphereGeometry(1.0, 16, 16),
+                                new THREE.MeshBasicMaterial({
+                                    color: 0x00ffaa,
+                                    emissive: 0x00ff00,
+                                    transparent: true,
+                                    opacity: 0.7
+                                })
+                            );
+                            
+                            // Position at the joint between segments
+                            connector.position.copy(segmentPos);
+                            const adjust = model.userData.mainAxis;
+                            connector.position[adjust] -= 0.5;
+                            
+                            stackGroup.add(connector);
+                        }
+                        
+                        // Add attachment points
+                        addAttachmentPointsToGLBMicrotubule(model);
+                        
+                        // Load the next segment
+                        loadSegment(index + 1);
+                    },
+                    null,  // No specific position - we'll set it based on the previous segment
+                    9       // Same size factor as before
+                );
+            }
+            
+            // Start the loading sequence with the first segment
+            loadSegment(0);
+            
+            return stackGroup;
+        }
+
+        // 3. Add a new, simpler function for creating microtubule stacks
+
+        function createSimpleStack(position) {
+            log('Creating a simple guaranteed microtubule stack...');
+            
+            // Create container
+            const stackGroup = new THREE.Group();
+            stackGroup.position.copy(position);
+            scene.add(stackGroup);
+            
+            // Load first segment
+            loadGLBModel(
+                'microtubule.glb',
+                function(gltf, model) {
+                    log('First segment loaded successfully');
+                    model.userData.segmentIndex = 0;
+                    stackGroup.add(model);
+                    
+                    // After the first one loads, load the second segment
+                    loadGLBModel(
+                        'microtubule.glb',
+                        function(gltf, model2) {
+                            log('Second segment loaded successfully');
+                            model2.userData.segmentIndex = 1;
+                            model2.position.x = 9; // Place it to the right of the first one
+                            stackGroup.add(model2);
+                            
+                            // After second one loads, load the third
+                            loadGLBModel(
+                                'microtubule.glb',
+                                function(gltf, model3) {
+                                    log('Third segment loaded successfully');
+                                    model3.userData.segmentIndex = 2;
+                                    model3.position.x = 18; // Place it to the right of the second one
+                                    stackGroup.add(model3);
+                                    
+                                    log('Simple stack completed successfully!');
+                                },
+                                null,
+                                9
+                            );
+                        },
+                        null,
+                        9
+                    );
+                },
+                null,
+                9
+            );
+            
+            return stackGroup;
+        }
+
+        // 1. Reset and simplify initialization function with persistence protections
+        function initializeAllModels() {
+            // Clean start - clear any previous attempt logs
+            log('-------- FRESH START --------');
+            log('Initializing models with fail-safe approach...');
+            
+            // Create a parent container for all 3D models that will never be removed
+            const permanentContainer = new THREE.Group();
+            permanentContainer.name = "PermanentModelContainer";
+            permanentContainer.userData.isPermanent = true;
+            scene.add(permanentContainer);
+            
+            // Load 3 separate microtubules in fixed positions
+            log('Loading 3 microtubules at fixed positions');
+            createFixedMicrotubule(new THREE.Vector3(0, 10, 0), permanentContainer);
+            createFixedMicrotubule(new THREE.Vector3(-15, 5, 15), permanentContainer);
+            createFixedMicrotubule(new THREE.Vector3(15, 5, -15), permanentContainer);
+        }
+
+        // 2. Create a simplified function that loads a single microtubule at a fixed position
+        function createFixedMicrotubule(position, parent) {
+            // Create a placeholder to show we're trying to load something
+            const placeholder = new THREE.Mesh(
+                new THREE.BoxGeometry(10, 2, 2),
+                new THREE.MeshBasicMaterial({
+                    color: 0x00ff00,
+                    wireframe: true
+                })
+            );
+            placeholder.position.copy(position);
+            parent.add(placeholder);
+            
+            log(`Creating microtubule at ${position.x}, ${position.y}, ${position.z}`);
+            
+            // Basic loader for just one model
+            const loader = new THREE.GLTFLoader();
+            
+            // Try with explicit error handling
+            try {
+                loader.load(
+                    'microtubule.glb', // Just try the direct path
+                    function(gltf) {
+                        log('SUCCESS! Microtubule loaded');
+                        
+                        const model = gltf.scene;
+                        
+                        // Apply a consistent scale
+                        model.scale.set(0.2, 0.2, 0.2); // Start with a small scale to ensure visibility
+                        
+                        // Position it
+                        model.position.copy(position);
+                        
+                        // Add safety flags
+                        model.userData.isModel = true;
+                        model.userData.isPermanent = true;
+                        model.userData.loadTime = Date.now();
+                        
+                        // Remove placeholder
+                        parent.remove(placeholder);
+                        
+                        // Add to parent container
+                        parent.add(model);
+                        
+                        // Create a highlight sphere to make it super obvious
+                        const highlight = new THREE.Mesh(
+                            new THREE.SphereGeometry(1.5, 16, 16),
+                            new THREE.MeshBasicMaterial({
+                                color: 0xff0000,
+                                transparent: true,
+                                opacity: 0.3
+                            })
+                        );
+                        model.add(highlight);
+                        
+                        log(`Model added to scene at ${position.x}, ${position.y}, ${position.z}`);
+                        
+                        // CRITICAL: Prevent the model from being garbage collected
+                        window.safeModels = window.safeModels || [];
+                        window.safeModels.push(model);
+                    },
+                    function(xhr) {
+                        if (xhr.lengthComputable) {
+                            const percent = Math.round(xhr.loaded / xhr.total * 100);
+                            log(`Loading: ${percent}%`);
+                        }
+                    },
+                    function(error) {
+                        log(`ERROR loading model: ${error.message}`);
+                        
+                        // Create a fallback object on error
+                        const fallback = new THREE.Mesh(
+                            new THREE.CylinderGeometry(1, 1, 10, 16),
+                            new THREE.MeshPhongMaterial({
+                                color: 0xff00ff
+                            })
+                        );
+                        fallback.position.copy(position);
+                        parent.add(fallback);
+                        
+                        // Remove placeholder
+                        parent.remove(placeholder);
+                        
+                        log('Added fallback object instead');
+                    }
+                );
+            } catch (e) {
+                log(`CRITICAL ERROR in loader: ${e.message}`);
+            }
+        }
+
+        // 3. Add a function to verify models stay in the scene
+        function verifyModelsPresent() {
+            log('Verifying models are present in scene...');
+            
+            let foundModels = 0;
+            scene.traverse(function(object) {
+                if (object.userData && object.userData.isModel) {
+                    foundModels++;
+                    log(`Found model: ${object.uuid} at position ${object.position.x}, ${object.position.y}, ${object.position.z}`);
+                }
+            });
+            
+            log(`Total models found in scene: ${foundModels}`);
+            
+            // If no models found, try to recreate them
+            if (foundModels === 0) {
+                log('WARNING: No models found in scene! Attempting to recreate...');
+                initializeAllModels();
+            }
+        }
+
+        // 4. Call initialization and set up periodic verification
+        log('Starting protected model initialization...');
+        initializeAllModels();
+
+        // Check models are still present periodically
+        setInterval(verifyModelsPresent, 5000);
+
+        // Create a direct function to place multiple microtubule models around the map
+        function placeManyMicrotubules() {
+            log('Placing multiple microtubule models around the map...');
+            
+            // Create positions in a circular pattern
+            const positions = [
+                // Center area
+                new THREE.Vector3(0, 8, 0),
+                new THREE.Vector3(0, 4, 0),
+                
+                // Cardinal directions - closer
+                new THREE.Vector3(10, 5, 0),  
+                new THREE.Vector3(-10, 5, 0),
+                new THREE.Vector3(0, 5, 10),
+                new THREE.Vector3(0, 5, -10),
+                
+                // Cardinal directions - further
+                new THREE.Vector3(20, 6, 0),
+                new THREE.Vector3(-20, 6, 0),
+                new THREE.Vector3(0, 6, 20),
+                new THREE.Vector3(0, 6, -20),
+                
+                // Diagonals
+                new THREE.Vector3(15, 3, 15),
+                new THREE.Vector3(-15, 3, 15),
+                new THREE.Vector3(15, 3, -15),
+                new THREE.Vector3(-15, 3, -15),
+            ];
+            
+            // Place microtubules at each position
+            positions.forEach((position, index) => {
+                setTimeout(() => {
+                    log(`Placing microtubule ${index + 1}/${positions.length} at ${position.x}, ${position.y}, ${position.z}`);
+                    placeMicrotubule(position);
+                }, index * 200); // Stagger loading to avoid overwhelming
+            });
+        }
+
+        // Simplified direct loading function
+        function placeMicrotubule(position) {
+            // Create a fallback in case model doesn't load
+            const fallback = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1, 10, 16),
+                new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    transparent: true,
+                    opacity: 0.8
+                })
+            );
+            fallback.position.copy(position);
+            fallback.rotation.z = Math.PI / 2; // Make it horizontal
+            scene.add(fallback);
+            
+            // Try loading the actual model
+            if (THREE.GLTFLoader) {
+                const loader = new THREE.GLTFLoader();
+                loader.load(
+                    'microtubule.glb',
+                    function(gltf) {
+                        const model = gltf.scene;
+                        
+                        // Apply scaling and position
+                        model.scale.set(0.2, 0.2, 0.2);
+                        model.position.copy(position);
+                        model.rotation.y = Math.random() * Math.PI * 2; // Random rotation
+                        
+                        // Add permanent tag
+                        model.userData = {
+                            isMicrotubule: true,
+                            position: position.clone()
+                        };
+                        
+                        // Add to scene and remove fallback
+                        scene.add(model);
+                        scene.remove(fallback);
+                        
+                        // Store a reference to prevent garbage collection
+                        window.allModels = window.allModels || [];
+                        window.allModels.push(model);
+                        
+                        log(`Microtubule loaded at ${position.x}, ${position.y}, ${position.z}`);
+                    },
+                    null,
+                    function(error) {
+                        log(`Couldn't load microtubule: ${error.message}`);
+                    }
+                );
+            }
+        }
+
+        // Direct initialization function
+        function simplifiedInit() {
+            log('Starting simplified initialization...');
+            
+            // Stop any existing interval checks
+            if (window.modelCheckInterval) {
+                clearInterval(window.modelCheckInterval);
+            }
+            
+            // Clear the debug log for a clean start
+            debugPanel.innerHTML = '';
+            log('=== STARTING FRESH INITIALIZATION ===');
+            
+            // Place many microtubules
+            placeManyMicrotubules();
+        }
+
+        // Call our simplified initialization directly
+        log('Calling simplified microtubule placement...');
+        simplifiedInit();
+
+        // ========= COMPLETELY NEW MODEL MANAGEMENT SYSTEM =========
+        // Add this at the end of the file
+
+        // 1. Create a specialized class for tracking and managing persistent models
+        class PersistentModelManager {
+            constructor() {
+                log("Initializing persistent model manager");
+                this.models = new Map();
+                this.fallbacks = new Map();
+                this.container = new THREE.Group();
+                this.container.name = "PERSISTENT_MODEL_CONTAINER";
+                scene.add(this.container);
+                
+                // Save reference to prevent garbage collection
+                window.MODEL_MANAGER = this;
+                
+                // Set up recovery interval
+                this.setupRecoveryCheck();
+            }
+            
+            createModel(position, id) {
+                log(`Creating persistent model at ${position.x}, ${position.y}, ${position.z} with ID: ${id}`);
+                
+                // Create a fallback that will ALWAYS remain visible
+                const fallback = new THREE.Group();
+                
+                // Add both an outer box and inner cylinder for better visibility
+                const box = new THREE.Mesh(
+                    new THREE.BoxGeometry(12, 3, 3),
+                    new THREE.MeshPhongMaterial({
+                        color: 0x00aaff,
+                        transparent: true,
+                        opacity: 0.3,
+                        wireframe: true
+                    })
+                );
+                fallback.add(box);
+                
+                const cylinder = new THREE.Mesh(
+                    new THREE.CylinderGeometry(1, 1, 10, 16),
+                    new THREE.MeshPhongMaterial({
+                        color: 0x00aaff,
+                        transparent: false // Must be visible
+                    })
+                );
+                cylinder.rotation.z = Math.PI / 2; // Make it horizontal
+                fallback.add(cylinder);
+                
+                fallback.position.copy(position);
+                fallback.rotation.y = Math.random() * Math.PI * 2;
+                
+                // Add to container AND add docking points to the fallback
+                this.container.add(fallback);
+                this.addDockingPoints(fallback);
+                
+                // Store in our maps
+                this.fallbacks.set(id, fallback);
+                
+                // Now try to load the real model
+                this.loadGLBModel(position, id, fallback);
+                
+                // Return the fallback as an immediate representation
+                return fallback;
+            }
+            
+            loadGLBModel(position, id, fallback) {
+                if (!THREE.GLTFLoader) {
+                    log("ERROR: GLTFLoader not available");
+                    return;
+                }
+                
+                const loader = new THREE.GLTFLoader();
+                const self = this;
+                
+                // Keep track of load attempts
+                let loadAttempts = 0;
+                const maxAttempts = 3;
+                
+                function attemptLoad() {
+                    loadAttempts++;
+                    log(`Attempt ${loadAttempts} to load microtubule.glb for ${id}`);
+                    
+                    // Try loading the model
+                    loader.load(
+                        'microtubule.glb',
+                        function(gltf) {
+                            log(`GLB model loaded successfully for ID: ${id}`);
+                            
+                            const model = gltf.scene;
+                            model.userData.id = id;
+                            model.userData.isPersistent = true;
+                            model.userData.isGLBModel = true;
+                            model.userData.originalPosition = position.clone();
+                            model.name = `microtubule_${id}`;
+                            
+                            // Scale and position
+                            model.scale.set(0.2, 0.2, 0.2);
+                            model.position.copy(position);
+                            model.rotation.copy(fallback.rotation);
+                            
+                            // Make all parts of the model visible
+                            model.traverse(child => {
+                                if (child.isMesh) {
+                                    child.visible = true;
+                                    // Improve material visibility
+                                    if (child.material) {
+                                        child.material.transparent = false;
+                                        child.material.opacity = 1.0;
+                                        child.material.needsUpdate = true;
+                                    }
+                                }
+                            });
+                            
+                            // Add to scene but keep the fallback
+                            self.container.add(model);
+                            
+                            // Hide the fallback to show the real model
+                            fallback.visible = false;
+                            
+                            // Store in our map
+                            self.models.set(id, model);
+                            
+                            // Add attachment points to the model
+                            self.addDockingPoints(model);
+                            
+                            // Add global reference to prevent garbage collection
+                            window.persistentModels = window.persistentModels || [];
+                            window.persistentModels.push(model);
+                            
+                            log(`Model ${id} added to container`);
+                        },
+                        function(xhr) {
+                            // Progress
+                        },
+                        function(error) {
+                            log(`Error loading GLB model: ${error.message}`);
+                            
+                            // Retry loading if under max attempts
+                            if (loadAttempts < maxAttempts) {
+                                log(`Retrying load for ${id}, attempt ${loadAttempts + 1}/${maxAttempts}`);
+                                setTimeout(attemptLoad, 1000);
+                            } else {
+                                log(`Failed to load model after ${maxAttempts} attempts. Using fallback permanently.`);
+                            }
+                        }
+                    );
+                }
+                
+                // Start the first load attempt
+                attemptLoad();
+            }
+            
+            addDockingPoints(model) {
+                // Add attachment points (5 along the length)
+                for (let i = 0; i < 5; i++) {
+                    const ratio = i / 4; // 0 to 1
+                    const xOffset = -5 + ratio * 10; // -5 to 5 along the length
+                    
+                    const dockPoint = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.5, 16, 16),
+                        new THREE.MeshPhongMaterial({
+                            color: 0xff9900,
+                            emissive: 0xff6600,
+                            emissiveIntensity: 0.5
+                        })
+                    );
+                    dockPoint.position.set(xOffset, 1.5, 0);
+                    
+                    model.add(dockPoint);
+                    
+                    // Add this to global attachment points
+                    attachmentPoints.push({
+                        visualizer: dockPoint,
+                        microtubule: model,
+                        used: false
+                    });
+                    
+                    log(`Added docking point ${i+1}/5 to model`);
+                }
+            }
+            
+            setupRecoveryCheck() {
+                // Set up continuous monitoring
+                const self = this;
+                setInterval(function() {
+                    self.checkAndRecoverModels();
+                }, 2000);
+            }
+            
+            checkAndRecoverModels() {
+                log("Running model recovery check...");
+                
+                // First verify our container is still in the scene
+                if (!scene.getObjectByName(this.container.name)) {
+                    log("CRITICAL: Container was removed! Re-adding to scene");
+                    scene.add(this.container);
+                }
+                
+                // Check all models
+                for (const [id, model] of this.models.entries()) {
+                    // Check if model still has a parent
+                    if (!model.parent) {
+                        log(`Model ${id} lost its parent! Re-adding to container`);
+                        this.container.add(model);
+                    }
+                    
+                    // Check if model is visible
+                    if (model.visible === false) {
+                        log(`Model ${id} was hidden! Making visible again`);
+                        model.visible = true;
+                        
+                        // Also make sure all child meshes are visible
+                        model.traverse(child => {
+                            if (child.isMesh) {
+                                child.visible = true;
+                            }
+                        });
+                    }
+                    
+                    // Ensure position hasn't changed
+                    if (model.userData.originalPosition) {
+                        if (!model.position.equals(model.userData.originalPosition)) {
+                            log(`Model ${id} moved from original position! Resetting.`);
+                            model.position.copy(model.userData.originalPosition);
+                        }
+                    }
+                }
+                
+                // Always ensure the fallbacks are available and visible
+                for (const [id, fallback] of this.fallbacks.entries()) {
+                    if (!fallback.parent) {
+                        log(`Fallback ${id} lost its parent! Re-adding to container`);
+                        this.container.add(fallback);
+                    }
+                    
+                    // Only make fallback visible if the actual model isn't present
+                    if (!this.models.has(id)) {
+                        fallback.visible = true;
+                    }
+                    
+                    // Ensure all children are ready to be visible if needed
+                    fallback.traverse(child => {
+                        if (child.isMesh) {
+                            child.visible = true;
+                        }
+                    });
+                }
+            }
+        }
+
+        // 2. Create master initialization function
+        function initializeWithPersistentModels() {
+            log('===== SIMPLIFYING TO INDIVIDUAL MODELS ONLY =====');
+            
+            // Clean up any previous initialization
+            stopAllIntervals();
+            
+            // Create our model manager
+            const modelManager = new PersistentModelManager();
+            
+            // Create more individual models distributed throughout the scene
+            const positions = [
+                // Center area
+                new THREE.Vector3(0, 8, 0),
+                new THREE.Vector3(5, 7, 5),
+                new THREE.Vector3(-5, 7, -5),
+                
+                // Inner circle
+                new THREE.Vector3(15, 5, 0),
+                new THREE.Vector3(0, 5, 15),
+                new THREE.Vector3(-15, 5, 0),
+                new THREE.Vector3(0, 5, -15),
+                
+                // Mid-range positions
+                new THREE.Vector3(18, 4, 18),
+                new THREE.Vector3(-18, 4, 18),
+                new THREE.Vector3(18, 4, -18),
+                new THREE.Vector3(-18, 4, -18),
+                
+                // Outer positions
+                new THREE.Vector3(25, 6, 25),
+                new THREE.Vector3(-25, 6, 25),
+                new THREE.Vector3(25, 6, -25),
+                new THREE.Vector3(-25, 6, -25),
+                
+                // Additional random positions
+                new THREE.Vector3(10, 3, -20),
+                new THREE.Vector3(-10, 3, 20),
+                new THREE.Vector3(30, 7, 5),
+                new THREE.Vector3(-30, 7, -5)
+            ];
+            
+            // Create all models with unique IDs - stagger creation to avoid overwhelming
+            positions.forEach((pos, index) => {
+                setTimeout(() => {
+                    modelManager.createModel(pos, `microtubule_${index}`);
+                }, index * 300);
+            });
+            
+            log(`Scheduled creation of ${positions.length} individual microtubule models`);
+        }
+
+        // 3. Utility to stop all intervals
+        function stopAllIntervals() {
+            // Clear all existing intervals to prevent conflicts
+            const highestId = window.setInterval(() => {}, 0);
+            for (let i = 0; i < highestId; i++) {
+                window.clearInterval(i);
+            }
+            log("All intervals cleared");
+        }
+
+        // 4. Override the scene.remove method to prevent accidental removal
+        const originalRemove = THREE.Object3D.prototype.remove;
+        THREE.Object3D.prototype.remove = function(object) {
+            // Check if the object being removed is our container or a model
+            if (object && object.userData) {
+                if (object.userData.isPersistent || object.userData.isGLBModel) {
+                    log(`BLOCKED: Attempt to remove persistent object: ${object.name || object.uuid}`);
+                    console.trace("Removal stack trace");
+                    return; // Block the removal
+                }
+            }
+            
+            // Proceed with normal removal for non-protected objects
+            originalRemove.call(this, object);
+        };
+
+        // 5. Start our new initialization
+        log('Starting protected model system...');
+        initializeWithPersistentModels();
+
+        // ========= EMERGENCY FALLBACK SYSTEM =========
+        // Add this at the end of the file
+
+        // Create a complete fallback system that doesn't use GLB models at all
+        function createEmergencyMicrotubuleSystem() {
+            log('********* IMPLEMENTING EMERGENCY FALLBACK SYSTEM *********');
+            
+            // Stop all existing checks and clear intervals
+            stopAllIntervals();
+            
+            // Create a dedicated container for our objects
+            const emergencyContainer = new THREE.Group();
+            emergencyContainer.name = "EMERGENCY_MICROTUBULE_CONTAINER";
+            
+            // Store a global reference
+            window.EMERGENCY_CONTAINER = emergencyContainer;
+            
+            // Add to scene
+            scene.add(emergencyContainer);
+            
+            // Define positions for microtubules
+            const positions = [
+                // Central region
+                new THREE.Vector3(0, 8, 0),
+                new THREE.Vector3(5, 7, 5),
+                new THREE.Vector3(-5, 7, -5),
+                
+                // Around the player
+                new THREE.Vector3(10, 5, 0),
+                new THREE.Vector3(-10, 5, 0),
+                new THREE.Vector3(0, 5, 10),
+                new THREE.Vector3(0, 5, -10),
+                
+                // Outer region
+                new THREE.Vector3(15, 6, 15),
+                new THREE.Vector3(-15, 6, 15),
+                new THREE.Vector3(15, 6, -15),
+                new THREE.Vector3(-15, 6, -15),
+            ];
+            
+            // Track all created objects
+            const createdObjects = [];
+            
+            // Create each microtubule using simple geometry
+            positions.forEach((position, index) => {
+                // Create a complex microtubule representation
+                const tubeGroup = createReliableMicrotubule(position, index);
+                emergencyContainer.add(tubeGroup);
+                createdObjects.push(tubeGroup);
+                
+                log(`Created emergency microtubule at position ${index + 1}/${positions.length}`);
+            });
+            
+            // Set up a robust animation loop that ensures visibility
+            function ensureVisibility() {
+                // First, make sure container is in scene
+                if (!scene.getObjectByName(emergencyContainer.name)) {
+                    log('CRITICAL: Emergency container missing from scene! Re-adding...');
+                    scene.add(emergencyContainer);
+                }
+                
+                // Check if container is visible
+                if (!emergencyContainer.visible) {
+                    log('CRITICAL: Emergency container invisibile! Making visible...');
+                    emergencyContainer.visible = true;
+                }
+                
+                // Check all objects
+                let visibleCount = 0;
+                createdObjects.forEach((obj, index) => {
+                    if (!obj.parent) {
+                        log(`CRITICAL: Microtubule ${index} lost parent! Re-adding...`);
+                        emergencyContainer.add(obj);
+                    }
+                    
+                    if (!obj.visible) {
+                        log(`Making microtubule ${index} visible again`);
+                        obj.visible = true;
+                    } else {
+                        visibleCount++;
+                    }
+                    
+                    // Also check all children
+                    obj.traverse(child => {
+                        if (child.isMesh && !child.visible) {
+                            child.visible = true;
+                        }
+                    });
+                });
+                
+                log(`Visibility check: ${visibleCount}/${createdObjects.length} microtubules visible`);
+            }
+            
+            // Set up periodic checks
+            const visibilityInterval = setInterval(ensureVisibility, 1000);
+            window.VISIBILITY_INTERVAL = visibilityInterval;
+            
+            // Add a hook to the render function to ensure visibility every frame
+            const originalRender = renderer.render;
+            renderer.render = function(scene, camera) {
+                // Before rendering, ensure emergency container is visible
+                if (window.EMERGENCY_CONTAINER) {
+                    window.EMERGENCY_CONTAINER.visible = true;
+                    
+                    // Also check a random object each frame to spread the cost
+                    if (createdObjects.length > 0) {
+                        const randomIndex = Math.floor(Math.random() * createdObjects.length);
+                        const obj = createdObjects[randomIndex];
+                        if (obj && !obj.visible) {
+                            obj.visible = true;
+                        }
+                    }
+                }
+                
+                // Proceed with normal rendering
+                originalRender.call(this, scene, camera);
+            };
+            
+            log('Emergency fallback system activated');
+            
+            return emergencyContainer;
+        }
+
+        // Create reliable microtubule using pure geometry
+        function createReliableMicrotubule(position, index) {
+            // Create a robust representation using simple geometries
+            const tubularGroup = new THREE.Group();
+            tubularGroup.position.copy(position);
+            tubularGroup.userData.isMicrotubule = true;
+            tubularGroup.userData.index = index;
+            
+            // Random rotation around Y axis
+            tubularGroup.rotation.y = Math.random() * Math.PI * 2;
+            
+            // Create the main tube
+            const mainTube = new THREE.Mesh(
+                new THREE.CylinderGeometry(1, 1, 12, 16),
+                new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    specular: 0x00ffff,
+                    shininess: 50
+                })
+            );
+            mainTube.rotation.z = Math.PI / 2; // Make it horizontal
+            tubularGroup.add(mainTube);
+            
+            // Add caps at the ends
+            const capGeometry = new THREE.SphereGeometry(1, 16, 16);
+            const capMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0088cc
+            });
+            
+            const leftCap = new THREE.Mesh(capGeometry, capMaterial);
+            leftCap.position.x = -6;
+            tubularGroup.add(leftCap);
+            
+            const rightCap = new THREE.Mesh(capGeometry, capMaterial);
+            rightCap.position.x = 6;
+            tubularGroup.add(rightCap);
+            
+            // Add connection points (binding sites)
+            for (let i = 0; i < 5; i++) {
+                const ratio = i / 4; // 0 to 1
+                const xOffset = -5 + ratio * 10; // -5 to 5 along the length
+                
+                const bindingSite = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 12, 12),
+                    new THREE.MeshPhongMaterial({
+                        color: 0xff9900,
+                        emissive: 0xff6600,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                bindingSite.position.set(xOffset, 1.5, 0);
+                
+                tubularGroup.add(bindingSite);
+                
+                // Add to global attachment points
+                attachmentPoints.push({
+                    visualizer: bindingSite,
+                    microtubule: tubularGroup,
+                    used: false
+                });
+            }
+            
+            // Add a highlight to make it more visible
+            const highlight = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.2, 1.2, 12.5, 16),
+                new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.2,
+                    wireframe: true
+                })
+            );
+            highlight.rotation.z = Math.PI / 2; // Make it horizontal
+            tubularGroup.add(highlight);
+            
+            return tubularGroup;
+        }
+
+        // Call this to activate the emergency system
+        log('Activating emergency fallback system...');
+        createEmergencyMicrotubuleSystem();
+
+        // Override the render loop to ensure objects remain visible
+        function addRenderLoopProtection() {
+            // Save a reference to the original animate function
+            const originalAnimate = window.animate;
+            
+            // Create a new animate function that includes visibility checks
+            window.animate = function() {
+                // Call the original animate function
+                if (originalAnimate) {
+                    originalAnimate();
+                }
+                
+                // Ensure microtubules remain visible
+                if (window.EMERGENCY_CONTAINER) {
+                    window.EMERGENCY_CONTAINER.visible = true;
+                }
+                
+                // Request the next frame
+                requestAnimationFrame(window.animate);
+            };
+            
+            // Start the new animation loop
+            window.animate();
+        }
+
+        // Add protection to the render loop
+        addRenderLoopProtection();
+
+        // SIMPLE MICROTUBULE FUNCTION - Add this at the end of the file
+        // This will add standard microtubule GLB models without any complex management
+
+        function renderSimpleMicrotubules() {
+            log('=== SIMPLE MICROTUBULE RENDERING ===');
+            
+            // Define fixed positions for 10 microtubules
+            const positions = [
+                // Center area
+                new THREE.Vector3(0, 8, 0),
+                new THREE.Vector3(5, 7, 5),
+                new THREE.Vector3(-5, 7, -5),
+                
+                // Circle around player starting area
+                new THREE.Vector3(12, 5, 0),
+                new THREE.Vector3(8, 5, 8),
+                new THREE.Vector3(0, 5, 12),
+                new THREE.Vector3(-8, 5, 8),
+                new THREE.Vector3(-12, 5, 0),
+                new THREE.Vector3(-8, 5, -8),
+                new THREE.Vector3(0, 5, -12)
+            ];
+            
+            // IMPORTANT: Make sure nothing is clearing microtubules
+            // Disable any code that's removing objects
+            window.doNotRemoveMicrotubules = true;
+            
+            // Load each microtubule directly
+            positions.forEach((position, index) => {
+                log(`Creating microtubule ${index + 1} at ${position.x}, ${position.y}, ${position.z}`);
+                
+                // Use standard loader
+                const loader = new THREE.GLTFLoader();
+                
+                loader.load(
+                    'microtubule.glb',
+                    function(gltf) {
+                        const model = gltf.scene;
+                        
+                        // Position and orientation
+                        model.position.copy(position);
+                        model.rotation.y = Math.random() * Math.PI * 2;
+                        
+                        // Scale to appropriate size 
+                        model.scale.set(0.2, 0.2, 0.2);
+                        
+                        // Add custom userData to identify
+                        model.userData = {
+                            type: 'simpleMicrotubule',
+                            index: index,
+                            position: position.clone(),
+                            permanent: true,
+                            doNotRemove: true
+                        };
+                        
+                        // Add directly to scene
+                        scene.add(model);
+                        
+                        // Store reference globally
+                        window.simpleMicrotubules = window.simpleMicrotubules || [];
+                        window.simpleMicrotubules.push(model);
+                        
+                        log(`Successfully added microtubule ${index + 1}`);
+                        
+                        // Add attachment points
+                        addAttachmentPointsToSimpleMicrotubule(model);
+                    },
+                    undefined,
+                    function(error) {
+                        log(`Error loading microtubule ${index + 1}: ${error.message}`);
+                    }
+                );
+            });
+        }
+
+        // Simple attachment point function
+        function addAttachmentPointsToSimpleMicrotubule(model) {
+            // Calculate dimensions to place attachment points properly
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            
+            log(`Microtubule model dimensions: ${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}`);
+            
+            // Determine main axis (longest dimension)
+            let mainAxis = 'x';
+            let mainLength = size.x;
+            if (size.y > size.x && size.y > size.z) {
+                mainAxis = 'y';
+                mainLength = size.y;
+            } else if (size.z > size.x && size.z > size.y) {
+                mainAxis = 'z';
+                mainLength = size.z;
+            }
+            
+            // Calculate approximate radius
+            const radius = (mainAxis === 'x') ? Math.max(size.y, size.z)/2 : 
+                          (mainAxis === 'y') ? Math.max(size.x, size.z)/2 : 
+                                              Math.max(size.x, size.y)/2;
+            
+            log(`Determined main axis is ${mainAxis}, radius is approximately ${radius.toFixed(2)}`);
+            
+            // Add 5 attachment points along the main axis
+            for (let i = 0; i < 5; i++) {
+                const position = new THREE.Vector3();
+                const ratio = i / 4; // 0 to 1
+                
+                // Position along main axis
+                const mainAxisPos = -mainLength/2 + ratio * mainLength;
+                
+                // Set position based on axis
+                if (mainAxis === 'x') {
+                    position.set(mainAxisPos, radius * 0.8, 0);
+                } else if (mainAxis === 'y') {
+                    position.set(0, mainAxisPos, radius * 0.8);
+                } else { // z
+                    position.set(0, radius * 0.8, mainAxisPos);
+                }
+                
+                // Create attachment point
+                const attachPoint = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 12, 12),
+                    new THREE.MeshPhongMaterial({
+                        color: 0xff9900,
+                        emissive: 0xff6600
+                    })
+                );
+                
+                attachPoint.position.copy(position);
+                model.add(attachPoint);
+                
+                // Add to global attachment points
+                attachmentPoints.push({
+                    visualizer: attachPoint,
+                    microtubule: model,
+                    used: false
+                });
+                
+                log(`Added attachment point at position ${i+1}/5 on microtubule`);
+            }
+        }
+
+
+        // Call this function to add the microtubules
+        renderSimpleMicrotubules();
+
+        // Stop any other functions that might be interfering
+        // This is a forceful way to ensure nothing else removes our models
+        clearTimeout(window.microtubuleClearTimeout);
+        clearInterval(window.microtubuleCheckInterval);
+
+        // ==== REPLACE ENTIRE SCRIPT AT END OF FILE WITH THIS ====
+        // This will run after all other initializations
+
+        // Clean up any conflicting code
+        function cleanupConflictingCode() {
+            log('Starting fresh with simplified approach');
+        }
+
+        // Load GLB microtubules with minimal error handling
+        function loadMicrotubules() {
+            log('Loading microtubule models...');
+            
+            // Update loading info immediately
+            updateLoadingInfo('Explore the cell environment! Loading models...');
+            
+            // Create a circle of positions
+            const positions = [];
+            const count = 10;
+            const radius = 15;
+            
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                positions.push(new THREE.Vector3(x, 5, z));
+            }
+            
+            // Load each model separately with a slight delay to avoid overwhelming
+            setTimeout(() => {
+                loadGLTFLoader().then(() => {
+                    log('GLTFLoader ready, loading models...');
+                    
+                    positions.forEach((position, index) => {
+                        setTimeout(() => {
+                            loadSingleMicrotubule(position, index);
+                        }, index * 300);
+                    });
+                }).catch(err => {
+                    log('Could not load GLTFLoader: ' + err.message);
+                    updateLoadingInfo('Models could not be loaded. Exploring with basic environment only.');
+                });
+            }, 500);
+        }
+        
+        // Function to load a single microtubule
+        function loadSingleMicrotubule(position, index) {
+            if (!THREE.GLTFLoader) {
+                log('GLTFLoader not available');
+                return;
+            }
+            
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                'microtubule.glb',
+                function(gltf) {
+                    const model = gltf.scene;
+                    model.scale.set(0.2, 0.2, 0.2);
+                    model.position.copy(position);
+                    model.userData.type = 'glbMicrotubule';
+                    model.userData.isPermanent = true;
+                    scene.add(model);
+                    
+                    // Add simple attachment points
+                    addSimpleAttachmentPoints(model);
+                    
+                    // Keep track of model for reference
+                    window.glbModels = window.glbModels || [];
+                    window.glbModels.push(model);
+                    
+                    log(`Loaded microtubule ${index + 1}`);
+                    
+                    if (index === 9) {
+                        updateLoadingInfo('All models loaded! Explore the cell environment.');
+                    }
+                },
+                function(xhr) {
+                    // Progress
+                },
+                function(error) {
+                    log(`Error loading microtubule ${index + 1}: ${error.message}`);
+                }
+            );
+        }
+        
+        // Add simple attachment points
+        function addSimpleAttachmentPoints(model) {
+            // Calculate approximate size
+            const bbox = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+            
+            // Add 5 evenly spaced attachment points along the Z axis
+            for (let i = 0; i < 5; i++) {
+                const attachPoint = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 12, 12),
+                    new THREE.MeshPhongMaterial({
+                        color: 0xff9900,
+                        emissive: 0xff6600
+                    })
+                );
+                
+                // Position attachment point
+                const ratio = i / 4; // 0 to 1
+                const z = -size.z/2 + ratio * size.z;
+                attachPoint.position.set(0, size.y/2, z);
+                model.add(attachPoint);
+                
+                // Add to global attachment points
+                attachmentPoints.push({
+                    visualizer: attachPoint,
+                    microtubule: model,
+                    used: false
+                });
+            }
+        }
+
+        // EMERGENCY FIX FOR BLANK SCREEN - ADD THIS AT THE END OF THE FILE
+        (function() {
+            // Force a simple animation loop that has no dependencies
+            function emergencyRender() {
+                // Force render the scene
+                renderer.render(scene, camera);
+                requestAnimationFrame(emergencyRender);
+            }
+        
+            // Position camera
+            camera.position.set(0, 10, 20);
+            camera.lookAt(0, 0, 0);
+        
+            // Start rendering immediately
+            emergencyRender();
+        
+            // Update status message
+            updateLoadingInfo('Environment loaded! Exploring cell...');
+        
+            // Add some visible objects to the scene
+            setTimeout(function() {
+                // Create simple microtubules that are guaranteed to show up
+                const positions = [
+                    new THREE.Vector3(0, 5, 0),
+                    new THREE.Vector3(10, 5, 0),
+                    new THREE.Vector3(-10, 5, 0),
+                    new THREE.Vector3(0, 5, 10),
+                    new THREE.Vector3(0, 5, -10)
+                ];
+        
+                // Create simple objects
+                positions.forEach(function(position) {
+                    // Simple cylinder as microtubule
+                    const tube = new THREE.Mesh(
+                        new THREE.CylinderGeometry(1, 1, 12, 16),
+                        new THREE.MeshPhongMaterial({color: 0x00aaff})
+                    );
+                    tube.rotation.z = Math.PI / 2;  // Make horizontal
+                    tube.position.copy(position);
+                    scene.add(tube);
+        
+                    // Attachment point
+                    const point = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.7, 12, 12),
+                        new THREE.MeshPhongMaterial({color: 0xff9900, emissive: 0xff6600})
+                    );
+                    point.position.set(position.x, position.y + 1.5, position.z);
+                    scene.add(point);
+                });
+                
+                console.log("Emergency objects added to scene");
+                
+                // Now that emergency objects are added, try to load the GLB models
+                setTimeout(() => {
+                    loadMicrotubules();
+                }, 1000);
+            }, 1000);
+        })();
+    </script>
+</body>
+</html> 

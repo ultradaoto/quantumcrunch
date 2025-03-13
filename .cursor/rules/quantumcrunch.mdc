@@ -1,0 +1,88 @@
+---
+description: This rule governs AI behavior for the "Quantum Crunch" project, a 3D browser-based game built with Three.js. It provides context for the game’s mechanics, visuals, and controls, ensuring the AI generates accurate code, debugging suggestions, and optimizations tailored to the project.
+globs: 
+---
+# Quantum Crunch - Project Rule
+
+## Memorybank Folder
+The `/memorybank/` folder contains crucial documentation for the "Quantum Crunch" project. It includes the following files:
+- `memorybank/game-design-document.md`: Outlines the game's structure, mechanics, and intent.
+- `memorybank/tech-stack.md`: Details the technologies and tools used in the project.
+- `memorybank/implementation-plan.md`: Provides a step-by-step plan for developing the game.
+- `memorybank/progress.md`: Tracks completed steps and project milestones.
+- `memorybank/architecture.md`: Documents the purpose and structure of various files in the project.
+
+These files serve as a comprehensive reference for understanding the game's design, development process, and current status.
+
+---
+
+## Rule Description
+This rule governs AI behavior for the "Quantum Crunch" project, a 3D browser-based game built with Three.js. It provides context for the game’s mechanics, visuals, and controls, ensuring the AI generates accurate code, debugging suggestions, and optimizations tailored to the project.
+
+---
+
+## When to Apply This Rule
+- **File Pattern:** `*` (applies to all files in the project)
+- **Context:** Apply this rule when working on game mechanics, 3D models, player controls, or visual effects.
+
+---
+
+## Project-Specific Instructions
+"Quantum Crunch" is a 3D game where players control a floating CamKII enzyme in a cellular environment. The objective is to form quantum tunnel connections between microtubule tracks by aligning the enzyme’s hexagonal shape with attachment points, depositing phosphorous atoms, and linking microtubules with semi-transparent threads.
+
+### Key Mechanics
+1. **Movement**: The CamKII enzyme navigates 3D space with:
+   - WASD for horizontal movement.
+   - Space to move up.
+   - Shift to move down.
+2. **Attachment**: The enzyme attaches to microtubules by aligning its hexagonal shape with hexagonal slots.
+3. **Phosphorous Deposit**: A glowing phosphorous atom is deposited at each attachment point.
+4. **Connection Creation**: Moving between microtubules creates a semi-transparent quantum tunnel thread.
+5. **Scoring**: Players earn points for each unique connection, promoting efficient network-building.
+
+### Visuals
+- **CamKII Enzyme**: Hexagonal structure (based on PDB 3SOA) with organic textures and six subunits.
+- **Microtubules**: Cylindrical tubes with helical patterns and hexagonal attachment slots.
+- **Phosphorous Atoms**: Glowing, spinning particles (e.g., yellow or green).
+- **Quantum Tunnel Connections**: Thin, shimmering, semi-transparent threads.
+
+### Controls
+- WASD: Horizontal movement.
+- Space: Ascend.
+- Shift: Descend.
+- Mouse/Arrow Keys (Optional): Rotate CamKII for alignment.
+- Enter/E: Attach/detach from microtubules.
+
+### Technical Requirements
+- **Engine**: Three.js for 3D rendering in the browser.
+- **Models**: Load CamKII and microtubule models in `.glTF` or `.OBJ` format.
+- **Physics**: Basic collision detection for attachment alignment.
+- **Effects**: Use particle systems or shaders for phosphorous atoms and quantum threads.
+
+---
+
+## AI Instructions
+When assisting with "Quantum Crunch," the AI should:
+- **Movement Controls**: Map WASD, Space, and Shift to smooth 3D movement.
+- **Attachment Logic**: Implement proximity and alignment checks for hexagonal contact points.
+- **Visual Feedback**: Add cues (e.g., highlights) for attachment points and successful connections.
+- **Performance**: Optimize code for 60 FPS in-browser playback.
+- **Documentation Reference**: Consult the files in the `/memorybank/` folder for detailed information on game design, technical stack, implementation plans, progress tracking, and project architecture when needed.
+
+---
+
+## Reference Files
+- **@file** `src/models/camkii.glb`: CamKII 3D model.
+- **@file** `src/models/microtubule.glb`: Microtubule 3D model.
+- **@file** `src/js/main.js`: Core game logic.
+- **@file** `src/js/controls.js`: Player control implementation.
+- **@file** `src/js/docking.js`: Docking dynamics implementation.
+- **@file** `src/js/player.js`: Player rendering implementation.
+- **@file** `src/js/engine.js`: Game Engine background implementation.
+- **@file** `src/js/multiplayer.js`: Multiplayer implementation.
+- **@file** `src/js/environment.js`: Rendering the full map.
+- **@file** `src/index.html`: The initial NODE launcher for game, remains simple.
+
+---
+
+This rule ensures the AI provides tailored support for developing "Quantum Crunch," aligning with its unique 3D mechanics, visuals, and browser-based requirements.

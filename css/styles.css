@@ -1,0 +1,47 @@
+body { 
+    margin: 0; 
+    overflow: hidden; 
+}
+
+canvas { 
+    display: block; 
+}
+
+#loading-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+    z-index: 100;
+}
+
+#debug-panel {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    border-radius: 5px;
+    font-family: monospace;
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+    width: 300px;
+}
+
+#controls-info {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 10px;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+    z-index: 100;
+} 

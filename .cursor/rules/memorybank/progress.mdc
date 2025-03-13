@@ -1,0 +1,33 @@
+---
+description: A progress report document for Cursor to edit as it makes progress on features of Quantum Crunch.
+globs: 
+alwaysApply: undefined
+---
+# Progress Log for 'Quantum Crunch'
+
+This file tracks the development progress of the "Quantum Crunch" game, built with Three.js and WebSocket. It serves as a cumulative record of completed tasks and milestones.
+
+---
+
+## Starting Point: Initial Code Rewrite for 3D Model Integration
+
+**Current Status**:  
+- The game already has some existing code, but an initial rewrite is underway to incorporate 3D imported models.  
+- The models being added are:  
+  - `camkii.glb`  
+  - `microtubule.glb`  
+- These models are located in the `src/assets/models/` directory.  
+- We are currently focused on rewriting the code to load and integrate these models into the Three.js scene.
+
+**Date**: [Insert Current Date]  
+**Notes**:  
+- The rewrite is necessary to support the addition of the CamKII and microtubule models.  
+- The goal is to ensure these models are properly loaded, positioned, and scaled within the game environment.
+
+**Next Steps**:  
+- Finish the code rewrite and confirm successful integration of the 3D models.  
+- Test the scene to ensure the models render correctly.
+
+---
+
+This entry reflects the current state of the project, starting from existing code and moving toward full integration of the 3D models.

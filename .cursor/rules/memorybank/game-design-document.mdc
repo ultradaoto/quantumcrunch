@@ -1,0 +1,43 @@
+---
+description: 
+globs: 
+---
+# Quantum Crunch - Game Design Document
+
+## Overview
+"Quantum Crunch" is a 3D browser-based game set in a cellular environment where players control a floating CamKII enzyme, represented as a hexagonal prism. The goal is to navigate and land on microtubule tracks with precise 6-point contacts, deposit phosphorous atoms, and create quantum tunnel connections between microtubules, visualized as semi-invisible threads. The game blends biological inspiration with engaging mechanics to encourage players to build networks of connections.
+
+## Core Gameplay
+The player controls the CamKII enzyme, maneuvering it in 3D space to land on microtubules. Inspired by the enzyme’s real-world structure (PDB 3SOA), landing requires aligning the CamKII’s hexagonal vertices with a microtubule’s surface, simplified to positioning its center above the target. Upon a successful landing:
+
+- The CamKII deposits a phosphorous atom in quantum spin, appearing as a glowing marker.
+- The player moves to another microtubule to form a quantum tunnel connection, shown as a semi-invisible thread linking the two points.
+
+Success is measured by the number of connections created, with scores reflecting the player’s network-building efficiency.
+
+## Visuals
+The game’s visual design draws from biological accuracy and stylized elements:
+- **CamKII Enzyme**: A hexagonal prism with organic textures and six distinct subunits, reflecting its scientific structure.
+- **Microtubules**: Cylindrical tubes featuring helical patterns and hexagonal attachment slots.
+- **Phosphorous Atoms**: Glowing, spinning particles (e.g., yellow or green) to signify quantum activity.
+- **Quantum Tunnel Connections**: Thin, shimmering, semi-transparent threads that hint at quantum interactions.
+
+## Game Dynamics and Challenges
+The core experience revolves around navigating the CamKII, landing on microtubules, depositing markers, and linking them with threads. The basic version features static microtubule tracks, focusing on precision and strategy. To deepen engagement, optional challenges may include:
+- Time limits to test speed and accuracy.
+- Moving microtubules to increase navigation difficulty.
+- Obstacles to add complexity.
+
+The simplified 6-point contact mechanic ties the gameplay to its biological theme, while scoring rewards players for expanding their quantum network.
+
+## Visual and Aesthetic Considerations
+Visuals balance scientific inspiration with player accessibility:
+- **CamKII Coloring**: Based on scientific visualizations, using varied colors to distinguish its domains.
+- **Microtubule Design**: Typically green or yellow, mirroring biological imaging standards.
+- **Animations**: Smooth landing transitions and particle effects for phosphorous deposition enhance immersion.
+- **Lighting**: Subtle effects to emphasize depth and highlight the 3D environment.
+
+This aesthetic approach ensures the game feels both educational and visually captivating.
+
+## Purpose
+"Quantum Crunch" aims to deliver an intuitive yet thought-provoking experience, merging a biologically inspired setting with rewarding gameplay. By focusing on precision, connection-building, and exploration, it provides a foundation for players to engage with a microscopic world in a dynamic, interactive way.

@@ -1,0 +1,47 @@
+---
+description: Content for a Cursor rules file named architecture.mdc, designed to provide strict architectural guidelines for the "Quantum Crunch" game using the Three.js framework. This document focuses solely on the core rules to ensure the AI adheres to the game's intended structure and technology, keeping it concise and framework-specific.
+globs: 
+alwaysApply: undefined
+---
+# Architecture Rules for 'Quantum Crunch'
+
+This document defines the strict architectural rules for developing the "Quantum Crunch" game using Three.js. It ensures that the AI remains focused on the core technology and maintains the game's intended structure within the Three.js framework.
+
+## Core Architecture Rules
+
+- **Three.js Exclusivity**: Use only Three.js for all 3D rendering, scene management, and related functionalities. Do not introduce other libraries or frameworks.
+- **Scene Configuration**: 
+  - Use a single Three.js `Scene` object to contain all game objects, lights, and cameras.
+  - Set the scene background to a light blue color (hex: `0xf0f9ff`).
+- **Renderer Setup**: 
+  - Utilize a `WebGLRenderer` with antialiasing enabled.
+  - Match the renderer size to the full window dimensions and append it to the document body.
+- **Camera Settings**: 
+  - Implement a `PerspectiveCamera` with:
+    - Field of view: 75 degrees.
+    - Aspect ratio: Window width divided by height.
+    - Near clipping plane: 0.1.
+    - Far clipping plane: 1000.
+  - Position the camera at `(0, 10, 15)` and orient it to look at `(0, 0, 0)`.
+- **Lighting Design**: 
+  - Add an `AmbientLight` (color: `0xffffff`, intensity: 0.7) for overall illumination.
+  - Include a `DirectionalLight` (color: `0xffffff`, intensity: 1.0) positioned at `(1, 1, 1)` for depth and shadows.
+- **Model Loading**: 
+  - Load all 3D models (e.g., `microtubule.glb`) using Three.js’s `GLTFLoader`.
+  - Scale models to 0.2 and position them at predefined coordinates.
+  - Tag models with `userData` to mark them as permanent objects.
+- **Player Controls**: 
+  - Implement keyboard-based movement for the `camKII` object:
+    - `WASD` keys for horizontal movement.
+    - `Space` for ascending.
+    - `Shift` for descending.
+  - Use event listeners to capture key presses and releases, updating the object’s position.
+- **Rendering Loop**: 
+  - Maintain a continuous animation loop calling `renderer.render(scene, camera)` each frame.
+- **Window Resizing**: 
+  - Add an event listener to adjust the camera’s aspect ratio and renderer size on window resize.
+
+## Additional Notes
+
+- All components must follow Three.js best practices for compatibility and performance.
+- Do not alter these rules unless explicitly required, ensuring the game’s core architecture remains intact.

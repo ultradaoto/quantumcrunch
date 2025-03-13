@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Quantum Crunch</title>
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Load Three.js libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    
+    <!-- Load application scripts in correct order -->
+    <!-- First load environment which has no dependencies -->
+    <script src="js/environment.js"></script>
+    
+    <!-- Then load player which depends on environment -->
+    <script src="js/player.js"></script>
+    
+    <!-- Load controls which depends on player -->
+    <script src="js/controls.js"></script>
+    
+    <!-- Load docking system which depends on environment, player and controls -->
+    <script src="js/docking.js"></script>
+    
+    <!-- Finally load main.js which coordinates everything -->
+    <script src="js/main.js"></script>
+</head>
+<body>
+    <div id="game-container"></div>
+    
+    <div id="debug-panel">
+        <div id="log-container">
+            <div id="log-output"></div>
+        </div>
+    </div>
+    
+    <div id="controls-info">
+        WASD: Move horizontally<br>
+        SPACE/SHIFT: Move up/down<br>
+        UP/DOWN: Zoom camera in/out<br>
+        LEFT/RIGHT: Orbit camera<br>
+        CTRL: Speed Boost<br>
+        E: Dock to microtubules<br>
+        T: Developer Mode<br>
+        <button onclick="window.location.href = window.location.href.split('?')[0] + '?refresh=' + Date.now();">Force Refresh</button>
+    </div>
+</body>
+</html> 
