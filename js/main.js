@@ -60,7 +60,7 @@ function initGame() {
 // Set up the Three.js scene
 function initScene() {
     window.scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+    window.scene.background = new THREE.Color(0x87CEEB); // Sky blue background
     log("Scene created");
 }
 

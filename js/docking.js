@@ -9,7 +9,7 @@ let readyToDock = true;
 let lastDockAttemptTime = 0; // Timestamp of last dock attempt
 
 // Variables for attachment points and landing visuals
-const attachmentPoints = []; // Will hold all attachment point objects
+const dockingAttachmentPoints = []; // Will hold all attachment point objects
 const landingMarkers = []; // Markers left after docking
 const connections = []; // Lines connecting landing markers
 let connectionMaterial = null; // Material for connection lines
@@ -86,8 +86,8 @@ function addAttachmentPointsToAllMicrotubules() {
         }
     });
     
-    console.log(`🚀 DOCKING SYSTEM: Added attachment points to ${pointsAdded} microtubules, total points: ${attachmentPoints.length}`);
-    log(`Added ${attachmentPoints.length} attachment points to ${pointsAdded} microtubules`);
+    console.log(`🚀 DOCKING SYSTEM: Added attachment points to ${pointsAdded} microtubules, total points: ${dockingAttachmentPoints.length}`);
+    log(`Added ${dockingAttachmentPoints.length} attachment points to ${pointsAdded} microtubules`);
 }
 
 // Add attachment points to a GLB-loaded microtubule model
@@ -175,11 +175,11 @@ function addAttachmentPointsToGLBMicrotubule(microtubuleModel, boundary) {
             position: position.clone(), // Local position
             normal: normal.clone(),    // Direction from center
             used: false,               // Initially unused
-            index: attachmentPoints.length
+            index: dockingAttachmentPoints.length
         };
         
         // Add to global attachment points array
-        attachmentPoints.push(attachmentPoint);
+        dockingAttachmentPoints.push(attachmentPoint);
         
         // Store in microtubule's userData for easy access
         microtubuleModel.userData.dockingSites.push({
@@ -244,11 +244,11 @@ function addAttachmentPointsToProceduralMicrotubule(microtubuleMesh, boundary) {
             position: new THREE.Vector3(0, radius, posY),
             normal: normal,
             used: false,
-            index: attachmentPoints.length
+            index: dockingAttachmentPoints.length
         };
         
         // Add to global attachment points array
-        attachmentPoints.push(attachmentPoint);
+        dockingAttachmentPoints.push(attachmentPoint);
         
         // Store in microtubule's userData for easy access
         microtubuleMesh.userData.dockingSites.push({
@@ -274,15 +274,15 @@ function checkForDockingPoints() {
         return null;
     }
     
-    console.log(`🚀 DOCKING SYSTEM: Checking ${attachmentPoints.length} attachment points for docking`);
+    console.log(`🚀 DOCKING SYSTEM: Checking ${dockingAttachmentPoints.length} attachment points for docking`);
     
     const dockingDistance = 3; // Units for docking distance threshold
     let closestPoint = null;
     let closestDistance = Infinity;
     
     // Check each attachment point
-    for (let i = 0; i < attachmentPoints.length; i++) {
-        const point = attachmentPoints[i];
+    for (let i = 0; i < dockingAttachmentPoints.length; i++) {
+        const point = dockingAttachmentPoints[i];
         if (point.used) continue; // Skip points already docked to
         
         // Get the world position of the attachment point
@@ -888,7 +888,7 @@ window.testDocking = function() {
     console.log("🚀 DOCKING SYSTEM: Manual test initiated");
     console.log("🚀 DOCKING SYSTEM: tryToDock exists:", typeof window.tryToDock === 'function');
     console.log("🚀 DOCKING SYSTEM: Initialized:", dockingSystemInitialized);
-    console.log("🚀 DOCKING SYSTEM: Attachment points:", attachmentPoints.length);
+    console.log("🚀 DOCKING SYSTEM: Attachment points:", dockingAttachmentPoints.length);
     
     // Try to dock
     if (typeof window.tryToDock === 'function') {
@@ -903,7 +903,7 @@ window.testDocking = function() {
 window.debugDockingSystem = function() {
     console.log("🚀 DOCKING SYSTEM DEBUG:");
     console.log("• Initialization status:", dockingSystemInitialized);
-    console.log("• Attachment points:", attachmentPoints.length);
+    console.log("• Attachment points:", dockingAttachmentPoints.length);
     console.log("• Player docked:", playerDocked);
     console.log("• Ready to dock:", readyToDock);
     console.log("• E key in window.keys:", window.keys['e'] || window.keys['E'] || window.keys['KeyE']);
@@ -912,7 +912,7 @@ window.debugDockingSystem = function() {
         console.log("• Player exists:", !!window.player);
         console.log("• Player position:", window.player.position);
         
-        if (attachmentPoints.length > 0) {
+        if (dockingAttachmentPoints.length > 0) {
             const closest = findClosestAttachmentPoint();
             console.log("• Closest attachment point distance:", closest.distance);
             console.log("• Within docking range:", closest.distance < 3);
@@ -924,11 +924,11 @@ window.debugDockingSystem = function() {
 function findClosestAttachmentPoint() {
     let closest = { point: null, distance: Infinity };
     
-    if (!window.player || attachmentPoints.length === 0) {
+    if (!window.player || dockingAttachmentPoints.length === 0) {
         return closest;
     }
     
-    for (const point of attachmentPoints) {
+    for (const point of dockingAttachmentPoints) {
         if (point.used) continue;
         
         const worldPos = new THREE.Vector3();
